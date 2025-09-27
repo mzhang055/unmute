@@ -146,10 +146,18 @@ class ContentScript {
       } catch (error) {
         // Popup might not be open, that's fine
       }
+
+      // Request background script to send Slack message
+      try {
+        await chrome.runtime.sendMessage({ action: 'sendSlackMessage' });
+      } catch (error) {
+        console.error('Error requesting Slack message:', error);
+      }
     } catch (error) {
       console.error('Error updating tracking stats:', error);
     }
   }
+
 
   private log(message: string, ...args: unknown[]): void {
     console.log(`[Unmute Content Script] ${message}`, ...args);
