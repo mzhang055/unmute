@@ -49,7 +49,6 @@ class ContentScript {
           sendResponse({ status: 'success', message: 'Button click handled' });
           break;
 
-
         default:
           throw new Error(`Unknown action: ${(request as any).action}`);
       }
@@ -152,12 +151,7 @@ class ContentScript {
         // Popup might not be open, that's fine
       }
 
-      // Request background script to send Slack message
-      try {
-        await chrome.runtime.sendMessage({ action: 'sendSlackMessage' });
-      } catch (error) {
-        console.error('Error requesting Slack message:', error);
-      }
+      // Note: Slack messages are now sent when speech is transcribed, not on every keypress
     } catch (error) {
       console.error('Error updating tracking stats:', error);
     }
@@ -308,13 +302,44 @@ class ContentScript {
     }
   }
 
-  private handleFinalTranscript(transcript: string): void {
-    this.log('Final transcript:', transcript);
+  private async handleFinalTranscript(transcript: string): Promise<void> {
+    this.log('=== CONTENT SCRIPT: FINAL TRANSCRIPT PROCESSING ===');
+    this.log('Original transcript:', transcript);
+
+    // Add laughter to the end of the transcript
+    const modifiedTranscript = transcript;
+    this.log('Modified transcript:', modifiedTranscript);
+    this.log('Transcript length:', modifiedTranscript.length);
+
+    // Generate TTS and save locally
+    try {
+      this.log('Sending message to background script...');
+      const response = await chrome.runtime.sendMessage({
+        action: 'generateTTSAndSaveLocally',
+        text: modifiedTranscript
+      });
+
+      this.log('Response from background script:', response);
+
+      if (response?.audioSaved) {
+        this.log('SUCCESS: Audio file saved locally');
+      } else {
+        this.log('ERROR: Audio generation or save failed');
+      }
+    } catch (error) {
+      this.log('ERROR: Exception in handleFinalTranscript');
+      console.error('Error processing transcript:', error);
+      this.log('Error name:', (error as Error).name);
+      this.log('Error message:', (error as Error).message);
+      this.log('Error stack:', (error as Error).stack);
+    }
 
     // Show final result indicator
     setTimeout(() => {
       this.showTranscriptResult(transcript);
     }, 500);
+
+    this.log('=== CONTENT SCRIPT: TRANSCRIPT PROCESSING COMPLETED ===');
   }
 
   private showTranscriptResult(transcript: string): void {
@@ -407,6 +432,51 @@ class ContentScript {
       indicator.style.transition = 'opacity 0.3s ease';
       setTimeout(() => indicator.remove(), 300);
     }
+  }
+
+  private playAudio(audioUrl: string): void {
+    try {
+      const audio = new Audio(audioUrl);
+      audio.volume = 0.8; // Set volume to 80%
+
+      audio.onload = () => {
+        this.log('Audio loaded successfully');
+      };
+
+      audio.onplay = () => {
+        this.log('Audio playback started');
+      };
+
+      audio.onended = () => {
+        this.log('Audio playback finished');
+        // Clean up the blob URL to free memory
+        URL.revokeObjectURL(audioUrl);
+      };
+
+      audio.onerror = (error) => {
+        console.error('Audio playback error:', error);
+        URL.revokeObjectURL(audioUrl);
+      };
+
+      audio.play().catch(error => {
+        console.error('Failed to play audio:', error);
+        URL.revokeObjectURL(audioUrl);
+      });
+    } catch (error) {
+      console.error('Error creating audio element:', error);
+    }
+  }
+
+  private base64ToBlob(base64Data: string, contentType: string): Blob {
+    const byteCharacters = atob(base64Data);
+    const byteNumbers = new Array(byteCharacters.length);
+
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+
+    const byteArray = new Uint8Array(byteNumbers);
+    return new Blob([byteArray], { type: contentType });
   }
 
   private log(message: string, ...args: unknown[]): void {

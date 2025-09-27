@@ -208,6 +208,65 @@
             background: #e8f5e8;
             color: #137333;
         }
+
+        .fish-config {
+            border-top: 1px solid #e8eaed;
+            padding-top: 16px;
+            margin-top: 16px;
+        }
+
+        .fish-config h3 {
+            font-size: 16px;
+            margin: 0 0 12px 0;
+            color: #ea4335;
+            font-weight: 500;
+        }
+
+        .fish-buttons {
+            display: flex;
+            gap: 8px;
+            margin: 12px 0;
+        }
+
+        .fish-buttons button {
+            flex: 1;
+            padding: 8px 12px;
+            font-size: 12px;
+        }
+
+        #saveFishBtn {
+            background: #ea4335;
+        }
+
+        #saveFishBtn:hover {
+            background: #d33b2c;
+        }
+
+        #testFishBtn {
+            background: #137333;
+        }
+
+        #testFishBtn:hover {
+            background: #0d5426;
+        }
+
+        .fish-status {
+            text-align: center;
+            margin: 8px 0;
+        }
+
+        .fish-indicator {
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 12px;
+            background: #f1f3f4;
+            color: #5f6368;
+        }
+
+        .fish-indicator.configured {
+            background: #fce8e6;
+            color: #ea4335;
+        }
     </style>
 </head>
 <body>
@@ -245,6 +304,25 @@
         </div>
         <div class="slack-status">
             <span id="slackStatus" class="slack-indicator">Not configured</span>
+        </div>
+    </div>
+
+    <div class="fish-config">
+        <h3>Fish TTS Configuration</h3>
+        <div class="input-group">
+            <label for="fishApiKey">Fish API Key:</label>
+            <input type="password" id="fishApiKey" placeholder="YOUR_API_KEY">
+        </div>
+        <div class="input-group">
+            <label for="voiceId">Voice ID:</label>
+            <input type="text" id="voiceId" placeholder="voice_id">
+        </div>
+        <div class="fish-buttons">
+            <button id="saveFishBtn">Save TTS Config</button>
+            <button id="testFishBtn">Test TTS</button>
+        </div>
+        <div class="fish-status">
+            <span id="fishStatus" class="fish-indicator">Not configured</span>
         </div>
     </div>
 

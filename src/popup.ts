@@ -8,6 +8,11 @@ interface SlackConfig {
   userToken: string;
 }
 
+interface FishConfig {
+  apiKey: string;
+  voiceId: string;
+}
+
 class PopupController {
   private totalCountEl: HTMLSpanElement;
   private lastPressEl: HTMLSpanElement;
@@ -21,6 +26,13 @@ class PopupController {
   private saveSlackBtn: HTMLButtonElement;
   private testSlackBtn: HTMLButtonElement;
   private slackStatusEl: HTMLSpanElement;
+
+  // Fish TTS elements
+  private fishApiKeyInput: HTMLInputElement;
+  private voiceIdInput: HTMLInputElement;
+  private saveFishBtn: HTMLButtonElement;
+  private testFishBtn: HTMLButtonElement;
+  private fishStatusEl: HTMLSpanElement;
 
   constructor() {
     this.totalCountEl = document.getElementById('totalCount') as HTMLSpanElement;
@@ -36,8 +48,16 @@ class PopupController {
     this.testSlackBtn = document.getElementById('testSlackBtn') as HTMLButtonElement;
     this.slackStatusEl = document.getElementById('slackStatus') as HTMLSpanElement;
 
+    // Fish TTS elements
+    this.fishApiKeyInput = document.getElementById('fishApiKey') as HTMLInputElement;
+    this.voiceIdInput = document.getElementById('voiceId') as HTMLInputElement;
+    this.saveFishBtn = document.getElementById('saveFishBtn') as HTMLButtonElement;
+    this.testFishBtn = document.getElementById('testFishBtn') as HTMLButtonElement;
+    this.fishStatusEl = document.getElementById('fishStatus') as HTMLSpanElement;
+
     if (!this.totalCountEl || !this.lastPressEl || !this.currentStatusEl || !this.clearBtn || !this.statusDiv ||
-        !this.channelIdInput || !this.userTokenInput || !this.saveSlackBtn || !this.testSlackBtn || !this.slackStatusEl) {
+        !this.channelIdInput || !this.userTokenInput || !this.saveSlackBtn || !this.testSlackBtn || !this.slackStatusEl ||
+        !this.fishApiKeyInput || !this.voiceIdInput || !this.saveFishBtn || !this.testFishBtn || !this.fishStatusEl) {
       throw new Error('Required DOM elements not found');
     }
 
@@ -48,9 +68,12 @@ class PopupController {
     this.clearBtn.addEventListener('click', this.handleClearStats.bind(this));
     this.saveSlackBtn.addEventListener('click', this.handleSaveSlackConfig.bind(this));
     this.testSlackBtn.addEventListener('click', this.handleTestSlack.bind(this));
+    this.saveFishBtn.addEventListener('click', this.handleSaveFishConfig.bind(this));
+    this.testFishBtn.addEventListener('click', this.handleTestFish.bind(this));
 
     this.loadAndDisplayStats();
     this.loadSlackConfig();
+    this.loadFishConfig();
 
     // Listen for updates from content script
     chrome.runtime.onMessage.addListener((message) => {
@@ -255,6 +278,118 @@ class PopupController {
     } else {
       this.slackStatusEl.textContent = 'Not configured';
       this.slackStatusEl.className = 'slack-indicator';
+    }
+  }
+
+  private async loadFishConfig(): Promise<void> {
+    try {
+      const result = await chrome.storage.local.get(['fishConfig']);
+      const config: FishConfig = result.fishConfig;
+
+      if (config) {
+        this.fishApiKeyInput.value = config.apiKey || '';
+        this.voiceIdInput.value = config.voiceId || '';
+        this.updateFishStatus(true);
+      } else {
+        this.updateFishStatus(false);
+      }
+    } catch (error) {
+      console.error('Error loading Fish config:', error);
+      this.updateFishStatus(false);
+    }
+  }
+
+  private async handleSaveFishConfig(): Promise<void> {
+    try {
+      const apiKey = this.fishApiKeyInput.value.trim();
+      const voiceId = this.voiceIdInput.value.trim();
+
+      if (!apiKey || !voiceId) {
+        this.showStatus('Please fill in both API Key and Voice ID', 'error');
+        return;
+      }
+
+      const config: FishConfig = { apiKey, voiceId };
+      await chrome.storage.local.set({ fishConfig: config });
+
+      this.updateFishStatus(true);
+      this.showStatus('Fish TTS configuration saved!', 'success');
+    } catch (error) {
+      console.error('Error saving Fish config:', error);
+      this.showStatus('Failed to save Fish configuration', 'error');
+    }
+  }
+
+  private async handleTestFish(): Promise<void> {
+    try {
+      const result = await chrome.storage.local.get(['fishConfig']);
+      const config: FishConfig = result.fishConfig;
+
+      if (!config || !config.apiKey || !config.voiceId) {
+        this.showStatus('Please save Fish configuration first', 'error');
+        return;
+      }
+
+      this.testFishBtn.disabled = true;
+      this.testFishBtn.textContent = 'Testing...';
+
+      // Test TTS with a simple message
+      const success = await this.testFishTTS('Hello! This is a test of Fish TTS.', config);
+
+      if (success) {
+        this.showStatus('Fish TTS test successful!', 'success');
+      } else {
+        this.showStatus('Fish TTS test failed', 'error');
+      }
+    } catch (error) {
+      console.error('Error testing Fish TTS:', error);
+      this.showStatus('Error testing Fish TTS', 'error');
+    } finally {
+      this.testFishBtn.disabled = false;
+      this.testFishBtn.textContent = 'Test TTS';
+    }
+  }
+
+  private async testFishTTS(text: string, config: FishConfig): Promise<boolean> {
+    try {
+      const response = await fetch('https://api.fish.audio/v1/tts', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${config.apiKey}`,
+          'Content-Type': 'application/json',
+          'model': 'speech-1.5'
+        },
+        body: JSON.stringify({
+          text: text,
+          reference_id: config.voiceId,
+          format: 'mp3'
+        })
+      });
+
+      if (response.ok) {
+        const audioBlob = await response.blob();
+        // Play the audio
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+        audio.play();
+        return true;
+      } else {
+        console.error('Fish TTS API error:', response.status, response.statusText);
+        return false;
+      }
+    } catch (error) {
+      console.error('Error calling Fish TTS API:', error);
+      return false;
+    }
+  }
+
+  private updateFishStatus(configured: boolean): void {
+    if (configured) {
+      this.fishStatusEl.textContent = 'Configured';
+      this.fishStatusEl.className = 'fish-indicator configured';
+    } else {
+      this.fishStatusEl.textContent = 'Not configured';
+      this.fishStatusEl.className = 'fish-indicator';
     }
   }
 }

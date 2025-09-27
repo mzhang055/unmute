@@ -7,11 +7,13 @@
     "activeTab",
     "storage",
     "contextMenus",
-    "scripting"
+    "scripting",
+    "downloads"
   ],
   "host_permissions": [
     "<all_urls>",
-    "https://slack.com/*"
+    "https://slack.com/*",
+    "https://api.fish.audio/*"
   ],
   "action": {
     "default_popup": "popup.html",
