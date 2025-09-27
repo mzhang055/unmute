@@ -1,7 +1,10 @@
 import { ButtonClickMessage, MessageResponse } from './types';
+/// <reference path="./types/speech.d.ts" />
 
 class ContentScript {
   private static instance: ContentScript;
+  private recognition: SpeechRecognition | null = null;
+  private isRecording = false;
 
   constructor() {
     if (ContentScript.instance) {
@@ -15,6 +18,7 @@ class ContentScript {
   private init(): void {
     this.setupMessageListener();
     this.setupKeyboardListener();
+    this.setupSpeechRecognition();
     this.log('Content script loaded');
   }
 
@@ -116,8 +120,9 @@ class ContentScript {
       const isSpace = event.code === 'Space';
 
       if (isCommandOrCtrl && isShift && isSpace) {
+        event.preventDefault(); // Prevent default behavior
+        this.toggleSpeechRecording();
         this.printTracking();
-        // Don't preventDefault() - let the native functionality work
       }
     });
   }
@@ -158,6 +163,251 @@ class ContentScript {
     }
   }
 
+  private setupSpeechRecognition(): void {
+    // Check if speech recognition is supported
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      this.log('Speech recognition not supported in this browser');
+      return;
+    }
+
+    this.recognition = new SpeechRecognition();
+
+    if (this.recognition) {
+      this.recognition.continuous = false;
+      this.recognition.interimResults = true;
+      this.recognition.lang = 'en-US';
+
+      this.recognition.onstart = () => {
+        this.log('Speech recognition started');
+        this.isRecording = true;
+        this.showRecordingIndicator();
+      };
+
+      this.recognition.onresult = (event: SpeechRecognitionEvent) => {
+        let transcript = '';
+        let isFinal = false;
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const result = event.results[i];
+          transcript += result[0].transcript;
+          if (result.isFinal) {
+            isFinal = true;
+          }
+        }
+
+        this.log('Speech recognition result:', { transcript, isFinal });
+        this.updateTranscriptDisplay(transcript, isFinal);
+
+        if (isFinal) {
+          this.handleFinalTranscript(transcript);
+        }
+      };
+
+      this.recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+        this.log('Speech recognition error:', event.error);
+        this.isRecording = false;
+        this.showErrorIndicator(`Speech recognition error: ${event.error}`);
+      };
+
+      this.recognition.onend = () => {
+        this.log('Speech recognition ended');
+        this.isRecording = false;
+        this.hideRecordingIndicator();
+      };
+
+      this.log('Speech recognition setup complete');
+    }
+  }
+
+  private toggleSpeechRecording(): void {
+    if (!this.recognition) {
+      this.showErrorIndicator('Speech recognition not available');
+      return;
+    }
+
+    if (this.isRecording) {
+      this.recognition.stop();
+      this.log('Stopping speech recognition');
+    } else {
+      try {
+        this.recognition.start();
+        this.log('Starting speech recognition');
+      } catch (error) {
+        this.log('Error starting speech recognition:', error);
+        this.showErrorIndicator('Could not start speech recognition');
+      }
+    }
+  }
+
+  private showRecordingIndicator(): void {
+    // Remove any existing indicator
+    const existingIndicator = document.getElementById('unmute-recording-indicator');
+    if (existingIndicator) {
+      existingIndicator.remove();
+    }
+
+    // Create recording indicator
+    const indicator = document.createElement('div');
+    indicator.id = 'unmute-recording-indicator';
+    indicator.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div class="recording-dot"></div>
+        <div class="recording-text">
+          <div style="font-weight: bold; font-size: 16px;">🎤 Recording...</div>
+          <div id="transcript-display" style="font-size: 14px; opacity: 0.8; margin-top: 4px;"></div>
+        </div>
+      </div>
+    `;
+
+    indicator.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: rgba(0, 0, 0, 0.9);
+      color: white;
+      padding: 16px 20px;
+      border-radius: 12px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      z-index: 10000;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+      border: 2px solid #ff4444;
+      backdrop-filter: blur(10px);
+      max-width: 300px;
+      word-wrap: break-word;
+    `;
+
+    // Add recording dot animation
+    const style = document.createElement('style');
+    style.textContent = `
+      .recording-dot {
+        width: 12px;
+        height: 12px;
+        background: #ff4444;
+        border-radius: 50%;
+        animation: recording-pulse 1s infinite;
+      }
+      @keyframes recording-pulse {
+        0% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.5; transform: scale(1.2); }
+        100% { opacity: 1; transform: scale(1); }
+      }
+    `;
+    document.head.appendChild(style);
+
+    document.body.appendChild(indicator);
+  }
+
+  private updateTranscriptDisplay(transcript: string, isFinal: boolean): void {
+    const transcriptEl = document.getElementById('transcript-display');
+    if (transcriptEl) {
+      transcriptEl.textContent = transcript || 'Listening...';
+      transcriptEl.style.opacity = isFinal ? '1' : '0.7';
+      transcriptEl.style.fontStyle = isFinal ? 'normal' : 'italic';
+    }
+  }
+
+  private handleFinalTranscript(transcript: string): void {
+    this.log('Final transcript:', transcript);
+
+    // Show final result indicator
+    setTimeout(() => {
+      this.showTranscriptResult(transcript);
+    }, 500);
+  }
+
+  private showTranscriptResult(transcript: string): void {
+    // Remove recording indicator
+    const recordingIndicator = document.getElementById('unmute-recording-indicator');
+    if (recordingIndicator) {
+      recordingIndicator.remove();
+    }
+
+    // Show final result
+    const result = document.createElement('div');
+    result.id = 'unmute-transcript-result';
+    result.innerHTML = `
+      <div style="margin-bottom: 8px; font-weight: bold;">✅ Speech Recognized:</div>
+      <div style="font-size: 14px; background: rgba(255,255,255,0.1); padding: 8px; border-radius: 6px; word-wrap: break-word;">
+        "${transcript}"
+      </div>
+    `;
+
+    result.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: rgba(0, 100, 0, 0.9);
+      color: white;
+      padding: 16px 20px;
+      border-radius: 12px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      z-index: 10000;
+      box-shadow: 0 4px 20px rgba(0, 100, 0, 0.3);
+      border: 2px solid #00ff00;
+      backdrop-filter: blur(10px);
+      max-width: 300px;
+      word-wrap: break-word;
+    `;
+
+    document.body.appendChild(result);
+
+    // Remove after 4 seconds
+    setTimeout(() => {
+      result.style.opacity = '0';
+      result.style.transform = 'translateX(100%)';
+      result.style.transition = 'all 0.3s ease';
+      setTimeout(() => result.remove(), 300);
+    }, 4000);
+  }
+
+  private showErrorIndicator(message: string): void {
+    // Remove any existing indicators
+    const existingIndicator = document.getElementById('unmute-recording-indicator');
+    if (existingIndicator) {
+      existingIndicator.remove();
+    }
+
+    const error = document.createElement('div');
+    error.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span>❌</span>
+        <span>${message}</span>
+      </div>
+    `;
+
+    error.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: rgba(200, 0, 0, 0.9);
+      color: white;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      z-index: 10000;
+      box-shadow: 0 4px 20px rgba(200, 0, 0, 0.3);
+      backdrop-filter: blur(10px);
+    `;
+
+    document.body.appendChild(error);
+
+    setTimeout(() => {
+      error.style.opacity = '0';
+      error.style.transition = 'opacity 0.3s ease';
+      setTimeout(() => error.remove(), 300);
+    }, 3000);
+  }
+
+  private hideRecordingIndicator(): void {
+    const indicator = document.getElementById('unmute-recording-indicator');
+    if (indicator) {
+      indicator.style.opacity = '0';
+      indicator.style.transition = 'opacity 0.3s ease';
+      setTimeout(() => indicator.remove(), 300);
+    }
+  }
 
   private log(message: string, ...args: unknown[]): void {
     console.log(`[Unmute Content Script] ${message}`, ...args);
