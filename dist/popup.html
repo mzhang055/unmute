@@ -122,6 +122,92 @@
         #clearBtn:hover {
             background: #d33b2c;
         }
+
+        .slack-config {
+            border-top: 1px solid #e8eaed;
+            padding-top: 16px;
+            margin-top: 16px;
+        }
+
+        .slack-config h3 {
+            font-size: 16px;
+            margin: 0 0 12px 0;
+            color: #1a73e8;
+            font-weight: 500;
+        }
+
+        .input-group {
+            margin: 12px 0;
+        }
+
+        .input-group label {
+            display: block;
+            font-size: 12px;
+            color: #5f6368;
+            margin-bottom: 4px;
+            font-weight: 500;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #dadce0;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #1a73e8;
+            box-shadow: 0 0 0 1px #1a73e8;
+        }
+
+        .slack-buttons {
+            display: flex;
+            gap: 8px;
+            margin: 12px 0;
+        }
+
+        .slack-buttons button {
+            flex: 1;
+            padding: 8px 12px;
+            font-size: 12px;
+        }
+
+        #saveSlackBtn {
+            background: #137333;
+        }
+
+        #saveSlackBtn:hover {
+            background: #0d5426;
+        }
+
+        #testSlackBtn {
+            background: #ea4335;
+        }
+
+        #testSlackBtn:hover {
+            background: #d33b2c;
+        }
+
+        .slack-status {
+            text-align: center;
+            margin: 8px 0;
+        }
+
+        .slack-indicator {
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 12px;
+            background: #f1f3f4;
+            color: #5f6368;
+        }
+
+        .slack-indicator.configured {
+            background: #e8f5e8;
+            color: #137333;
+        }
     </style>
 </head>
 <body>
@@ -140,6 +226,25 @@
         <div class="stat-item">
             <span class="stat-label">Status:</span>
             <span id="currentStatus" class="stat-value status-ready">Ready</span>
+        </div>
+    </div>
+
+    <div class="slack-config">
+        <h3>Slack Configuration</h3>
+        <div class="input-group">
+            <label for="channelId">Channel ID:</label>
+            <input type="text" id="channelId" placeholder="C1234567890">
+        </div>
+        <div class="input-group">
+            <label for="userToken">User Token:</label>
+            <input type="password" id="userToken" placeholder="xoxp-...">
+        </div>
+        <div class="slack-buttons">
+            <button id="saveSlackBtn">Save Config</button>
+            <button id="testSlackBtn">Test Message</button>
+        </div>
+        <div class="slack-status">
+            <span id="slackStatus" class="slack-indicator">Not configured</span>
         </div>
     </div>
 

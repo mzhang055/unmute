@@ -14,6 +14,7 @@ class BackgroundService {
     this.setupInstallListener();
     this.setupActionListener();
     this.setupContextMenus();
+    this.setupMessageListener();
     this.log('Background service initialized');
   }
 
@@ -145,6 +146,53 @@ class BackgroundService {
       this.log('Content script injected into tab:', tabId);
     } catch (error) {
       console.error('Failed to inject content script:', error);
+    }
+  }
+
+  private setupMessageListener(): void {
+    chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
+      if (message.action === 'sendSlackMessage') {
+        await this.sendSlackNotification();
+        sendResponse({ status: 'success' });
+      }
+      return true; // Indicates we will send a response asynchronously
+    });
+  }
+
+  private async sendSlackNotification(): Promise<void> {
+    try {
+      const result = await chrome.storage.local.get(['slackConfig']);
+      const config = result.slackConfig;
+
+      if (!config || !config.channelId || !config.userToken) {
+        this.log('Slack not configured, skipping notification');
+        return;
+      }
+
+      this.log('Sending Slack notification to channel:', config.channelId);
+
+      const response = await fetch('https://slack.com/api/chat.postMessage', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${config.userToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          channel: config.channelId,
+          text: '🎤 microphone triggered'
+        })
+      });
+
+      const data = await response.json();
+      this.log('Slack API response:', data);
+
+      if (data.ok) {
+        this.log('Slack message sent successfully');
+      } else {
+        console.error('Slack API error:', data.error);
+      }
+    } catch (error) {
+      console.error('Error sending Slack notification:', error);
     }
   }
 
