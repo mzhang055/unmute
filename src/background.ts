@@ -283,10 +283,10 @@ class BackgroundService {
         // Save to downloads/unmute/audio directory
         await this.saveAudioToDownloads(audioBlob, fullPath);
 
-        // Also send to Slack
-        this.log('Sending audio to Slack...');
+        // Also send to Slack with SpongeBob image
+        this.log('Sending audio and SpongeBob image to Slack...');
         const message = `🎤 Voice note: "${text}"`;
-        await this.sendSlackAudioBlob(audioBlob, filename, message);
+        await this.sendSlackAudioAndImage(audioBlob, filename, message);
 
         this.log('=== TTS GENERATION PROCESS COMPLETED SUCCESSFULLY ===');
         return true;
@@ -374,6 +374,266 @@ class BackgroundService {
       reader.onerror = reject;
       reader.readAsDataURL(blob);
     });
+  }
+
+  private async sendSlackAudioAndImage(audioBlob: Blob, filename: string, message: string): Promise<void> {
+    try {
+      const result = await chrome.storage.local.get(['slackConfig']);
+      const config = result.slackConfig;
+
+      if (!config || !config.channelId || !config.userToken) {
+        this.log('Slack not configured, skipping uploads');
+        return;
+      }
+
+      this.log('Uploading audio and SpongeBob image to Slack...');
+
+      // First, get SpongeBob image
+      const spongebobUrl = chrome.runtime.getURL('images/spongebob.png');
+      this.log('SpongeBob image URL:', spongebobUrl);
+
+      let imageBlob: Blob | null = null;
+      try {
+        const imageResponse = await fetch(spongebobUrl);
+        if (!imageResponse.ok) {
+          throw new Error(`Image fetch failed: ${imageResponse.status}`);
+        }
+        imageBlob = await imageResponse.blob();
+        this.log('SpongeBob image loaded, size:', imageBlob.size);
+      } catch (imageError) {
+        this.log('Failed to load SpongeBob image:', imageError);
+        this.log('Proceeding with audio upload only');
+      }
+
+      // Upload audio first, then image
+      if (imageBlob) {
+        // Upload audio file first
+        await this.uploadFileToSlack(audioBlob, filename, '', config);
+
+        // Upload image with proper image display settings second
+        await this.uploadImageToSlack(imageBlob, 'spongebob.png', config);
+
+        this.log('Audio and image uploaded to Slack');
+      } else {
+        await this.uploadFileToSlack(audioBlob, filename, '', config);
+        this.log('Audio uploaded to Slack successfully (image failed)');
+      }
+    } catch (error) {
+      console.error('Error uploading files to Slack:', error);
+    }
+  }
+
+  private async uploadMultipleFilesToSlack(files: Array<{blob: Blob, filename: string, comment: string}>, config: any): Promise<void> {
+    try {
+      this.log('Uploading multiple files to Slack together...');
+
+      // Step 1: Get upload URLs for all files
+      const uploadPromises = files.map(async (file) => {
+        this.log('Getting upload URL for:', file.filename);
+        const response = await fetch('https://slack.com/api/files.getUploadURLExternal', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${config.userToken}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({
+            filename: file.filename,
+            length: file.blob.size.toString()
+          })
+        });
+
+        const data = await response.json();
+        if (!data.ok) {
+          throw new Error(`Failed to get upload URL for ${file.filename}: ${data.error}`);
+        }
+
+        return { ...file, uploadData: data };
+      });
+
+      const fileUploadData = await Promise.all(uploadPromises);
+      this.log('Got upload URLs for all files');
+
+      // Step 2: Upload all files to their URLs
+      const uploadFilePromises = fileUploadData.map(async (fileData) => {
+        this.log('Uploading file:', fileData.filename);
+        const response = await fetch(fileData.uploadData.upload_url, {
+          method: 'POST',
+          body: fileData.blob
+        });
+
+        if (!response.ok) {
+          throw new Error(`File upload failed for ${fileData.filename}: ${response.status}`);
+        }
+
+        return fileData;
+      });
+
+      await Promise.all(uploadFilePromises);
+      this.log('All files uploaded successfully');
+
+      // Step 3: Complete the upload with all files in one message
+      const completeResponse = await fetch('https://slack.com/api/files.completeUploadExternal', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${config.userToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          files: fileUploadData.map(fileData => ({
+            id: fileData.uploadData.file_id,
+            title: fileData.filename
+          })),
+          channel_id: config.channelId
+        })
+      });
+
+      const completeData = await completeResponse.json();
+      this.log('Complete upload response:', completeData);
+
+      if (completeData.ok) {
+        this.log('All files shared to Slack successfully in one message');
+      } else {
+        console.error('Failed to complete multi-file upload:', completeData.error);
+      }
+    } catch (error) {
+      console.error('Error uploading multiple files to Slack:', error);
+    }
+  }
+
+  private async uploadImageToSlack(imageBlob: Blob, filename: string, config: any): Promise<void> {
+    try {
+      this.log('Uploading image for inline display to Slack:', filename);
+
+      // Step 1: Get upload URL for image
+      const uploadUrlResponse = await fetch('https://slack.com/api/files.getUploadURLExternal', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${config.userToken}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          filename: filename,
+          length: imageBlob.size.toString()
+        })
+      });
+
+      const uploadData = await uploadUrlResponse.json();
+      if (!uploadData.ok) {
+        console.error('Failed to get upload URL for image:', uploadData.error);
+        return;
+      }
+
+      // Step 2: Upload image
+      const uploadResponse = await fetch(uploadData.upload_url, {
+        method: 'POST',
+        body: imageBlob
+      });
+
+      if (!uploadResponse.ok) {
+        console.error('Image upload failed:', uploadResponse.status, uploadResponse.statusText);
+        return;
+      }
+
+      // Step 3: Complete upload with image display settings
+      const completeResponse = await fetch('https://slack.com/api/files.completeUploadExternal', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${config.userToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          files: [{
+            id: uploadData.file_id,
+            title: filename
+          }],
+          channel_id: config.channelId
+        })
+      });
+
+      const completeData = await completeResponse.json();
+      if (completeData.ok) {
+        this.log('Image uploaded successfully for display');
+      } else {
+        console.error('Failed to complete image upload:', completeData.error);
+      }
+    } catch (error) {
+      console.error('Error uploading image to Slack:', error);
+    }
+  }
+
+  private async uploadFileToSlack(fileBlob: Blob, filename: string, message: string, config: any): Promise<void> {
+    try {
+      this.log('Uploading file to Slack:', filename);
+
+      // Step 1: Get upload URL
+      this.log('Step 1: Getting upload URL for', filename);
+      const uploadUrlResponse = await fetch('https://slack.com/api/files.getUploadURLExternal', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${config.userToken}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          filename: filename,
+          length: fileBlob.size.toString()
+        })
+      });
+
+      const uploadData = await uploadUrlResponse.json();
+      this.log('Upload URL response for', filename, ':', uploadData);
+
+      if (!uploadData.ok) {
+        console.error('Failed to get upload URL for', filename, ':', uploadData.error);
+        return;
+      }
+
+      // Step 2: Upload file to the URL
+      this.log('Step 2: Uploading', filename, 'to:', uploadData.upload_url);
+      const uploadResponse = await fetch(uploadData.upload_url, {
+        method: 'POST',
+        body: fileBlob
+      });
+
+      if (!uploadResponse.ok) {
+        console.error('File upload failed for', filename, ':', uploadResponse.status, uploadResponse.statusText);
+        return;
+      }
+
+      // Step 3: Complete the upload
+      this.log('Step 3: Completing upload for', filename);
+      const requestBody: any = {
+        files: [{
+          id: uploadData.file_id,
+          title: filename
+        }],
+        channel_id: config.channelId
+      };
+
+      // Only add initial_comment if message is not empty
+      if (message && message.trim()) {
+        requestBody.initial_comment = message;
+      }
+
+      const completeResponse = await fetch('https://slack.com/api/files.completeUploadExternal', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${config.userToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      const completeData = await completeResponse.json();
+      this.log('Complete upload response for', filename, ':', completeData);
+
+      if (completeData.ok) {
+        this.log('File uploaded successfully:', filename);
+      } else {
+        console.error('Failed to complete upload for', filename, ':', completeData.error);
+      }
+    } catch (error) {
+      console.error('Error uploading', filename, 'to Slack:', error);
+    }
   }
 
   private async sendSlackAudioBlob(audioBlob: Blob, filename: string, message: string): Promise<void> {
