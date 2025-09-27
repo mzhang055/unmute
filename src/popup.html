@@ -71,12 +71,79 @@
             color: #d93025;
             border: 1px solid #f6aea9;
         }
+
+        .tracking-stats {
+            background: #f8f9fa;
+            border: 1px solid #e8eaed;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 16px 0;
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 8px 0;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: #5f6368;
+            font-weight: 500;
+        }
+
+        .stat-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: #202124;
+        }
+
+        .status-ready {
+            color: #137333 !important;
+        }
+
+        .status-active {
+            color: #1a73e8 !important;
+            animation: pulse 1s ease-in-out;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.6; }
+            100% { opacity: 1; }
+        }
+
+        #clearBtn {
+            background: #ea4335;
+            margin-top: 8px;
+        }
+
+        #clearBtn:hover {
+            background: #d33b2c;
+        }
     </style>
 </head>
 <body>
-    <h1>Unmute</h1>
-    <p>Chrome extension is ready!</p>
-    <button id="actionBtn">Click me</button>
+    <h1>Unmute Tracker</h1>
+    <p>Tracking Command+Shift+Space usage</p>
+
+    <div class="tracking-stats">
+        <div class="stat-item">
+            <span class="stat-label">Total Presses:</span>
+            <span id="totalCount" class="stat-value">0</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">Last Press:</span>
+            <span id="lastPress" class="stat-value">Never</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">Status:</span>
+            <span id="currentStatus" class="stat-value status-ready">Ready</span>
+        </div>
+    </div>
+
+    <button id="clearBtn">Clear Stats</button>
     <div id="status" class="status"></div>
 
     <script src="popup.js"></script>
