@@ -14,6 +14,7 @@ class ContentScript {
 
   private init(): void {
     this.setupMessageListener();
+    this.setupKeyboardListener();
     this.log('Content script loaded');
   }
 
@@ -44,8 +45,9 @@ class ContentScript {
           sendResponse({ status: 'success', message: 'Button click handled' });
           break;
 
+
         default:
-          throw new Error(`Unknown action: ${request.action}`);
+          throw new Error(`Unknown action: ${(request as any).action}`);
       }
     } catch (error) {
       console.error('Content script error:', error);
@@ -104,6 +106,49 @@ class ContentScript {
       indicator.style.opacity = '0';
       setTimeout(() => indicator.remove(), 300);
     }, 3000);
+  }
+
+  private setupKeyboardListener(): void {
+    document.addEventListener('keydown', (event) => {
+      // Check for Command+Shift+Space (Mac) or Ctrl+Shift+Space (Windows/Linux)
+      const isCommandOrCtrl = event.metaKey || event.ctrlKey;
+      const isShift = event.shiftKey;
+      const isSpace = event.code === 'Space';
+
+      if (isCommandOrCtrl && isShift && isSpace) {
+        this.printTracking();
+        // Don't preventDefault() - let the native functionality work
+      }
+    });
+  }
+
+  private async printTracking(): Promise<void> {
+    this.log('tracking');
+
+    // Store stats in Chrome storage
+    try {
+      const result = await chrome.storage.local.get(['trackingStats']);
+      const currentStats = result.trackingStats || { totalCount: 0, lastPress: 'Never' };
+
+      const now = new Date();
+      const timeString = now.toLocaleTimeString();
+
+      const newStats = {
+        totalCount: currentStats.totalCount + 1,
+        lastPress: timeString
+      };
+
+      await chrome.storage.local.set({ trackingStats: newStats });
+
+      // Notify popup if it's open
+      try {
+        await chrome.runtime.sendMessage({ action: 'trackingUpdate' });
+      } catch (error) {
+        // Popup might not be open, that's fine
+      }
+    } catch (error) {
+      console.error('Error updating tracking stats:', error);
+    }
   }
 
   private log(message: string, ...args: unknown[]): void {
