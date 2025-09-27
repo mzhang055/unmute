@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            width: 300px;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            background: #ffffff;
+        }
+
+        h1 {
+            font-size: 18px;
+            margin: 0 0 15px 0;
+            color: #1a73e8;
+            font-weight: 500;
+        }
+
+        p {
+            margin: 0 0 15px 0;
+            color: #5f6368;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        button {
+            background: #1a73e8;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background-color 0.2s;
+            width: 100%;
+        }
+
+        button:hover {
+            background: #1557b0;
+        }
+
+        button:active {
+            background: #0d47a1;
+        }
+
+        button:disabled {
+            background: #dadce0;
+            cursor: not-allowed;
+        }
+
+        .status {
+            margin-top: 10px;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            display: none;
+        }
+
+        .status.success {
+            background: #e8f5e8;
+            color: #137333;
+            border: 1px solid #ceead6;
+        }
+
+        .status.error {
+            background: #fce8e6;
+            color: #d93025;
+            border: 1px solid #f6aea9;
+        }
+    </style>
+</head>
+<body>
+    <h1>Unmute</h1>
+    <p>Chrome extension is ready!</p>
+    <button id="actionBtn">Click me</button>
+    <div id="status" class="status"></div>
+
+    <script src="popup.js"></script>
+</body>
+</html>
