@@ -1,6 +1,10 @@
 # SlackAttack
 
+🏆 **3rd Place Winner at Stupid Hackathon**
+
 Ever had a passive aggressive coworker and wanted to know what they really thought? Yeah, us too, so we created SlackAttack.
+
+[View on DevPost](https://devpost.com/software/slackattack)
 
 ## What it does
 
